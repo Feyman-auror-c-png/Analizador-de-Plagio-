@@ -145,7 +145,7 @@ function polite_delay(int $milliseconds): void
 
 function build_fragments(string $text): array
 {
-    $clean = preg_replace('/\s+/u', ' ', normalize_text($text));
+    $clean = normalize_text($text);
     $sentences = preg_split('/(?<=[.!?;:])\s+/u', $clean, -1, PREG_SPLIT_NO_EMPTY) ?: [];
     $fragments = [];
 
@@ -292,9 +292,34 @@ function find_matching_fragments(array $fragments, string $pageText): array
 
 function normalize_text(string $text): string
 {
-    $text = preg_replace('/[^\P{C}\n\t]+/u', ' ', $text) ?? $text;
-    $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
-    return trim($text);
+    $text = ensure_utf8($text);
+    $source = $text;
+
+    $cleaned = preg_replace('/[^\P{C}\n\t]+/u', ' ', $source);
+    if (!is_string($cleaned)) {
+        $cleaned = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]+/', ' ', $source) ?? '';
+    }
+
+    $normalized = preg_replace('/\s+/u', ' ', $cleaned);
+    if (!is_string($normalized)) {
+        $normalized = preg_replace('/\s+/', ' ', $cleaned) ?? '';
+    }
+
+    return trim($normalized);
+}
+
+function ensure_utf8(string $text): string
+{
+    if (mb_check_encoding($text, 'UTF-8')) {
+        return $text;
+    }
+
+    $converted = @mb_convert_encoding($text, 'UTF-8', 'UTF-8, ISO-8859-1, Windows-1252');
+    if (is_string($converted) && mb_check_encoding($converted, 'UTF-8')) {
+        return $converted;
+    }
+
+    return iconv('UTF-8', 'UTF-8//IGNORE', $text) ?: '';
 }
 
 function extract_pdf_text(string $filePath): string
